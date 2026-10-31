@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multimodal Digital Classroom Assessment — Interactive Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F6F5F1; --ink:#1D2230; --muted:#5E6577; --line:#E4E1D8; --card:#fff;
+    --panel-w:370px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit}
+  .app{display:flex;flex-direction:column;height:100vh;min-height:540px}
+
+  /* Header */
+  header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;padding:18px 22px 14px;background:var(--bg)}
+  .title h1{font-family:Fraunces,Georgia,serif;font-weight:600;font-size:clamp(20px,2.4vw,27px);letter-spacing:-.01em;margin:0 0 4px;line-height:1.15}
+  .title p{margin:0;color:var(--muted);font-size:14px}
+  .progress{min-width:190px}
+  .progress .ptext{font-size:12.5px;color:var(--muted);display:flex;justify-content:space-between;gap:10px;margin-bottom:6px}
+  .progress .ptext b{color:var(--ink)}
+  .bar{height:6px;border-radius:99px;background:#E7E4DB;overflow:hidden}
+  .bar i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#2563EB,#7C3AED,#BE185D);transition:width .5s ease}
+  .linkbtn{background:none;border:0;padding:0;color:var(--muted);text-decoration:underline;text-underline-offset:2px;cursor:pointer;font-size:12px}
+  .linkbtn:hover{color:var(--ink)}
+
+  /* Toolbar */
+  .toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:0 22px 12px}
+  .seg{display:inline-flex;background:#ECEAE3;border-radius:10px;padding:3px}
+  .seg button{border:0;background:none;padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer}
+  .seg button[aria-pressed="true"]{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .tbtn{border:1px solid var(--line);background:#fff;border-radius:9px;padding:6px 12px;font-size:13px;font-weight:500;cursor:pointer}
+  .tbtn:hover{border-color:#cfcbbf}
+  .spacer{flex:1}
+
+  /* Workspace */
+  .workspace{position:relative;flex:1;min-height:0;display:flex;border-top:1px solid var(--line)}
+  .stage{position:relative;flex:1;overflow:hidden;cursor:grab;touch-action:none;
+    background-color:#FAF9F6;background-image:radial-gradient(#DCD8CD 1px,transparent 1.2px);background-size:22px 22px}
+  .stage.dragging{cursor:grabbing}
+  .world{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+  .world.anim{transition:transform .5s cubic-bezier(.2,.75,.2,1)}
+  svg.links{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none}
+  svg.links path{fill:none;stroke-linecap:round}
+
+  /* Nodes */
+  .node{position:absolute;left:0;top:0;border:0;cursor:pointer;text-align:left;width:max-content;transition:box-shadow .2s,background-color .2s}
+  .node-root{background:var(--ink);color:#fff;border-radius:18px;padding:15px 24px;text-align:center;box-shadow:0 10px 30px rgba(29,34,48,.25)}
+  .node-root .r-title{display:block;font-family:Fraunces,Georgia,serif;font-size:21px;font-weight:600;letter-spacing:-.01em}
+  .node-root .r-sub{display:block;font-size:11.5px;opacity:.75;margin-top:3px;letter-spacing:.02em}
+  .node-branch{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:13px;padding:10px 16px 10px 10px;font-weight:600;font-size:15px;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,.05),0 6px 16px rgba(29,34,48,.06)}
+  .node-branch.side-l{padding:10px 10px 10px 16px;flex-direction:row-reverse}
+  .node-branch:hover{box-shadow:0 1px 2px rgba(0,0,0,.05),0 10px 24px rgba(29,34,48,.12)}
+  .num{background:var(--c);color:#fff;border-radius:8px;font-size:11.5px;font-weight:700;padding:4px 7px;font-variant-numeric:tabular-nums;letter-spacing:.03em}
+  .node-leaf{max-width:228px;background:color-mix(in srgb,var(--c) 7%,#fff);border:1px solid color-mix(in srgb,var(--c) 26%,transparent);border-radius:10px;padding:7px 12px;font-size:13.5px;line-height:1.32;font-weight:500}
+  .node-leaf.d3{background:#fff;font-weight:400;font-size:13px}
+  .node-leaf:hover{background:color-mix(in srgb,var(--c) 14%,#fff)}
+  .node.has-kids.side-r{padding-right:20px}
+  .node.has-kids.side-l{padding-left:20px}
+  .node-branch.has-kids.side-r{padding-right:22px}
+  .node-branch.has-kids.side-l{padding-left:22px}
+  .tog{position:absolute;top:50%;width:20px;height:20px;margin-top:-10px;border-radius:50%;background:#fff;border:1.5px solid var(--c);color:var(--c);font-size:14px;font-weight:700;line-height:17px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .side-r .tog{right:-10px}
+  .side-l .tog{left:-10px}
+  .tog:hover{background:var(--c);color:#fff}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--c);margin-left:7px;vertical-align:middle;transform:scale(0);transition:transform .3s}
+  .node-branch .dot{margin:0}
+  .node-leaf .dot{position:absolute;top:-4px;right:-4px;margin:0;width:8px;height:8px;border:2px solid #fff;box-sizing:content-box}
+  .node-leaf.has-kids.side-r .dot{right:auto;left:-4px}
+  .explored .dot{transform:scale(1)}
+  .node.selected{box-shadow:0 0 0 3px color-mix(in srgb,var(--c,#1D2230) 40%,transparent),0 8px 22px rgba(29,34,48,.14)}
+  .node-root.selected{box-shadow:0 0 0 4px rgba(29,34,48,.25),0 10px 30px rgba(29,34,48,.25)}
+  .node:focus-visible{outline:3px solid #1D2230;outline-offset:3px}
+
+  /* Stage overlays */
+  .hint{position:absolute;left:14px;top:12px;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:99px;padding:6px 8px 6px 14px;font-size:12.5px;color:var(--muted);box-shadow:0 2px 8px rgba(0,0,0,.05);cursor:default;max-width:calc(100% - 28px)}
+  .hint button{border:0;background:#EFEDE6;border-radius:50%;width:22px;height:22px;cursor:pointer;color:var(--muted);flex:none;line-height:1}
+  .zoom{position:absolute;left:14px;bottom:14px;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.06);cursor:default}
+  .zoom button{width:38px;height:36px;border:0;background:#fff;cursor:pointer;font-size:18px;font-weight:500;display:grid;place-items:center;color:var(--ink)}
+  .zoom button+button{border-top:1px solid var(--line)}
+  .zoom button:hover{background:#F4F2EC}
+
+  /* Outline view */
+  .outline{display:none;flex:1;overflow:auto;padding:22px;background:#FAF9F6}
+  .app.v-outline .outline{display:block}
+  .app.v-outline .stage{display:none}
+  .o-wrap{max-width:780px;margin:0 auto;transition:margin .3s}
+  .o-root{display:block;width:100%;text-align:left;background:var(--ink);color:#fff;border:0;border-radius:14px;padding:16px 18px;margin-bottom:14px;cursor:pointer}
+  .o-root b{font-family:Fraunces,Georgia,serif;font-size:19px;font-weight:600}
+  .o-root span{display:block;font-size:12.5px;opacity:.75;margin-top:2px}
+  details.o-item{margin:0}
+  .o-branch{background:#fff;border:1px solid var(--line);border-left:4px solid var(--c);border-radius:12px;margin-bottom:10px;padding:2px 0}
+  summary{list-style:none;cursor:pointer}
+  summary::-webkit-details-marker{display:none}
+  .o-row{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:8px;width:100%;border:0;background:none;text-align:left;cursor:pointer;font-size:14px}
+  .o-row:hover{background:#F6F4EE}
+  .o-row.active{background:color-mix(in srgb,var(--c) 10%,#fff)}
+  .o-branch>summary .o-row{font-weight:600;font-size:15px}
+  .o-row .plus{margin-left:auto;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--c);color:var(--c);display:grid;place-items:center;font-weight:700;font-size:13px;flex:none}
+  details[open]>summary .plus::before{content:"−"}
+  details:not([open])>summary .plus::before{content:"+"}
+  .o-children{padding:0 8px 8px 24px}
+  .o-children .o-children{padding-left:20px;border-left:1px dashed color-mix(in srgb,var(--c) 35%,transparent);margin-left:14px}
+
+  /* Panel */
+  .panel{position:absolute;top:14px;right:14px;bottom:14px;width:var(--panel-w);background:#fff;border-radius:18px;border:1px solid var(--line);box-shadow:0 20px 50px rgba(29,34,48,.16);display:flex;flex-direction:column;transform:translateX(calc(100% + 30px));transition:transform .4s cubic-bezier(.2,.75,.2,1);z-index:5}
+  .panel.open{transform:none}
+  .p-top{height:6px;border-radius:18px 18px 0 0;background:var(--c)}
+  .p-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px 0}
+  .chip{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--c);background:color-mix(in srgb,var(--c) 10%,#fff);padding:4px 9px;border-radius:99px}
+  .xbtn{border:0;background:#F1EFE9;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:18px;line-height:1;color:var(--muted)}
+  .xbtn:hover{background:#E6E3DA;color:var(--ink)}
+  .p-scroll{overflow:auto;padding:10px 20px 18px;flex:1}
+  .p-crumb{font-size:12px;color:var(--muted);margin:4px 0 2px}
+  .p-title{font-family:Fraunces,Georgia,serif;font-weight:600;font-size:23px;line-height:1.2;margin:2px 0 4px;letter-spacing:-.01em}
+  .p-sub{color:var(--muted);font-size:13.5px;margin:0 0 6px}
+  .sec{margin-top:16px}
+  .sec h3{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--c);margin:0 0 6px;font-weight:700}
+  .sec p{margin:0;font-size:14.5px;line-height:1.58}
+  .box{background:color-mix(in srgb,var(--c) 7%,#fff);border-left:3px solid var(--c);border-radius:4px 10px 10px 4px;padding:11px 14px}
+  .reflect{border:1.5px dashed color-mix(in srgb,var(--c) 45%,transparent);border-radius:10px;padding:11px 14px}
+  .reflect p{font-style:italic}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chips button{border:1px solid color-mix(in srgb,var(--c) 30%,transparent);background:#fff;border-radius:99px;padding:5px 11px;font-size:12.5px;cursor:pointer}
+  .chips button:hover{background:color-mix(in srgb,var(--c) 10%,#fff)}
+  .chips button.seen::after{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--c);margin-left:6px;vertical-align:middle}
+  .srcs{margin:0;padding-left:16px;font-size:12.8px;color:var(--muted);line-height:1.5}
+  .p-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;border-top:1px solid var(--line)}
+  .p-foot span{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .navbtn{border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer}
+  .navbtn:hover{border-color:var(--c);color:var(--c)}
+  .navbtn:disabled{opacity:.4;cursor:default;color:inherit;border-color:var(--line)}
+  @media (min-width:760px){ .app.panel-open.v-outline .o-wrap{margin-right:calc(var(--panel-w) + 20px)} }
+
+  /* Modal */
+  .modal{position:fixed;inset:0;background:rgba(29,34,48,.35);display:none;align-items:center;justify-content:center;padding:20px;z-index:20}
+  .modal.open{display:flex}
+  .modal-card{background:#fff;border-radius:18px;max-width:640px;width:100%;max-height:85vh;overflow:auto;padding:22px 24px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+  .modal-card h2{font-family:Fraunces,Georgia,serif;font-weight:600;margin:0;font-size:22px}
+  .modal-card ol{padding-left:20px;line-height:1.55;font-size:14px}
+  .modal-card li{margin-bottom:8px}
+  .modal-card .mh{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .modal-card .note{font-size:13px;color:var(--muted)}
+
+  @media (max-width:759px){
+    header{padding:14px 14px 10px}
+    .toolbar{padding:0 14px 10px}
+    .panel{top:auto;left:0;right:0;bottom:0;width:auto;height:74%;border-radius:18px 18px 0 0;transform:translateY(105%)}
+    .panel.open{transform:none}
+    .outline{padding:14px}
+    .hint{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header>
+    <div class="title">
+      <h1>Multimodal Digital Classroom Assessment</h1>
+      <p>An interactive map of concepts, theory, task design and research for language teachers</p>
+    </div>
+    <div class="progress" aria-live="polite">
+      <div class="ptext"><span><b id="pCount">0</b> of <span id="pTotal">0</span> topics explored</span><button class="linkbtn" id="resetBtn" type="button">Reset</button></div>
+      <div class="bar"><i id="pBar"></i></div>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="seg" role="group" aria-label="View">
+      <button type="button" id="vMap" aria-pressed="true">Map</button>
+      <button type="button" id="vOutline" aria-pressed="false">Outline</button>
+    </div>
+    <button class="tbtn" type="button" id="expandAll">Expand all</button>
+    <button class="tbtn" type="button" id="collapseAll">Collapse all</button>
+    <span class="spacer"></span>
+    <button class="tbtn" type="button" id="refsBtn">References</button>
+  </div>
+
+  <div class="workspace">
+    <div class="stage" id="stage" aria-label="Mind map">
+      <div class="world" id="world"><svg class="links" id="links" aria-hidden="true"></svg></div>
+      <div class="hint" id="hint"><span>Click a topic to explore it · Drag to move · Ctrl + scroll to zoom</span><button type="button" aria-label="Hide tip" id="hintX">×</button></div>
+      <div class="zoom">
+        <button type="button" id="zIn" aria-label="Zoom in">+</button>
+        <button type="button" id="zOut" aria-label="Zoom out">−</button>
+        <button type="button" id="zFit" aria-label="Fit map to screen" title="Fit to screen">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M1.5 5V1.5H5M11 1.5h3.5V5M14.5 11v3.5H11M5 14.5H1.5V11"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="outline" id="outline"><div class="o-wrap" id="oWrap"></div></div>
+
+    <aside class="panel" id="panel" aria-hidden="true" aria-label="Topic details">
+      <div class="p-top"></div>
+      <div class="p-head"><span class="chip" id="pChip"></span><button type="button" class="xbtn" id="pClose" aria-label="Close">×</button></div>
+      <div class="p-scroll" id="pScroll">
+        <div class="p-crumb" id="pCrumb"></div>
+        <h2 class="p-title" id="pTitle"></h2>
+        <p class="p-sub" id="pSub"></p>
+        <div id="pBody"></div>
+      </div>
+      <div class="p-foot">
+        <button type="button" class="navbtn" id="pPrev">Previous</button>
+        <span id="pPos"></span>
+        <button type="button" class="navbtn" id="pNext">Next</button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="modal" id="refsModal" role="dialog" aria-modal="true" aria-labelledby="refsTitle">
+  <div class="modal-card">
+    <div class="mh"><h2 id="refsTitle">References</h2><button type="button" class="xbtn" id="refsClose" aria-label="Close">×</button></div>
+    <p class="note">Key sources behind the concepts on this map.</p>
+    <ol id="refsList"></ol>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- Sources ---------- */
+const REFS = {
+  crooks1996:{s:"Crooks, Kane & Cohen, 1996", f:"Crooks, T. J., Kane, M. T., & Cohen, A. S. (1996). Threats to the valid use of assessments. <i>Assessment in Education: Principles, Policy &amp; Practice, 3</i>(3), 265–285."},
+  hung2013:{s:"Hung, Chiu & Yeh, 2013", f:"Hung, H.-T., Chiu, Y.-C. J., & Yeh, H.-C. (2013). Multimodal assessment of and for learning: A theory-driven design rubric. <i>British Journal of Educational Technology, 44</i>(3), 400–409."},
+  jewitt2008:{s:"Jewitt, 2008", f:"Jewitt, C. (2008). Multimodality and literacy in school classrooms. <i>Review of Research in Education, 32</i>, 241–267."},
+  kane2013:{s:"Kane, 2013", f:"Kane, M. T. (2013). Validating the interpretations and uses of test scores. <i>Journal of Educational Measurement, 50</i>(1), 1–73."},
+  kress2010:{s:"Kress, 2010", f:"Kress, G. (2010). <i>Multimodality: A social semiotic approach to contemporary communication</i>. Routledge."},
+  kress2021:{s:"Kress & van Leeuwen, 2021", f:"Kress, G., & van Leeuwen, T. (2021). <i>Reading images: The grammar of visual design</i> (3rd ed.). Routledge."},
+  messick1989:{s:"Messick, 1989", f:"Messick, S. (1989). Validity. In R. L. Linn (Ed.), <i>Educational measurement</i> (3rd ed., pp. 13–103). American Council on Education / Macmillan."},
+  nlg1996:{s:"New London Group, 1996", f:"New London Group. (1996). A pedagogy of multiliteracies: Designing social futures. <i>Harvard Educational Review, 66</i>(1), 60–92."},
+  norris2004:{s:"Norris, 2004", f:"Norris, S. (2004). <i>Analyzing multimodal interaction: A methodological framework</i>. Routledge."}
+};
+
+/* ---------- Content ---------- */
+const COLORS = ["#2563EB","#0E7490","#B45309","#BE185D","#15803D","#B91C1C","#7C3AED"];
+
+const DATA = {
+  l:"MDCA Framework", sub:"Multimodal Digital Classroom Assessment",
+  d:"Multimodal digital classroom assessment (MDCA) asks learners to show what they know and can do by creating digital products that combine several modes of meaning: spoken and written language, image, sound, gesture and layout. It narrows the gap between the way learners communicate in digital spaces and the way their learning is usually assessed.",
+  c:"A B1 group makes two-minute video tours of their city for a partner school abroad. The teacher assesses spoken accuracy and fluency, and also whether images, captions and narration work together to inform the audience.",
+  q:"Which of your current assessment tasks already involve more than one mode? Which of those modes do you actually score?",
+  s:["jewitt2008","hung2013"],
+  k:[
+  { l:"Core Concepts",
+    d:"The key ideas you need before you design or score a multimodal task.",
+    c:"Use these concepts as a shared vocabulary with colleagues when you discuss rubrics and moderate scores.",
+    q:"Could you explain to a colleague, in one sentence each, what multimodality and construct-irrelevant variance mean for your own tasks?",
+    k:[
+      { l:"Multimodality", s:["kress2010"],
+        d:"Meaning is made through several semiotic resources at once: speech, writing, image, colour, gesture, music and layout. Each mode does its own work, and none of them is mere decoration.",
+        c:"In a learner podcast, intonation, pauses and background sound carry meaning alongside the words. Feedback such as “your pause before the key fact builds suspense” treats sound as part of the message." },
+      { l:"Modal density", s:["norris2004"],
+        d:"The intensity and complexity of the modes used at the same moment. The more modes a task combines, the higher its modal density and the heavier the cognitive load for learners and assessors.",
+        c:"A narrated video with captions, gestures and slides is far denser than a written paragraph. With A2 learners, start with lower-density formats such as an audio recording or a captioned photo story." },
+      { l:"Literacy–assessment gap",
+        d:"Learners read and produce multimodal texts every day, yet they are usually assessed with paper-based, language-only tasks. The evidence we collect therefore misses much of how they actually communicate.",
+        c:"Students who script, film and edit short videos outside class may still meet only gap-fills and essays in course tests." },
+      { l:"Assessment validity", s:["messick1989"],
+        d:"Validity concerns whether the interpretations and decisions based on scores are justified. In multimodal tasks the main risks come from what the task leaves out and from what it lets in by accident.",
+        c:"Before scoring, decide what a high mark should mean: “communicates effectively in English through video” or “makes a technically impressive video”.",
+        k:[
+          { l:"Construct under-representation",
+            d:"The task or the rubric misses important parts of the ability you intend to assess.",
+            c:"Scoring a video presentation for grammar alone ignores pronunciation, audience awareness and the fit between speech and visuals." },
+          { l:"Construct-irrelevant variance",
+            d:"Scores are raised or lowered by factors that have nothing to do with the target ability.",
+            c:"A learner with a newer phone, better editing software or help from an older sibling gets a higher “speaking” mark. Keep language criteria separate from production criteria." },
+          { l:"Fairness and meaningful interpretation",
+            d:"Every learner has a comparable opportunity to show the target ability, and the scores support sound decisions about learning.",
+            c:"Offer device-light alternatives (audio only, slides with voice-over), share the rubric in advance and give technical polish little or no weight." }
+        ]}
+    ]},
+  { l:"Theoretical Grounding",
+    d:"The theories that explain why multimodal products count as evidence of learning and how to judge that evidence responsibly.",
+    c:"Social semiotics helps you describe what learners create. Validity theory helps you defend how you score it.",
+    q:"Which theory best explains a recent decision you made about a digital task: social semiotics, multiliteracies or validity theory?",
+    s:["kress2021","nlg1996","messick1989"],
+    k:[
+      { l:"Social semiotics", s:["kress2021","kress2010"],
+        d:"Kress and van Leeuwen see signs as made by people with interests, who choose among the resources available to them. Each mode has its own affordances: images show spatial relations, speech unfolds in time, writing organises an argument.",
+        c:"Ask learners why they used a picture instead of a sentence at a particular point. Their answer is evidence of design awareness." },
+      { l:"Validity theory", s:["messick1989","crooks1996","kane2013"],
+        d:"Messick describes validity as one integrated judgement about score meaning and its consequences. Crooks, Kane and Cohen present assessment as a chain from task to decision in which any link can break, and Kane develops this into an argument-based approach.",
+        c:"Walk through the chain for a vlog task: administration, scoring, generalisation to other tasks, judgement about the learner, final decision. Where is your weakest link?" },
+      { l:"Multiliteracies", s:["nlg1996"],
+        d:"The New London Group argue that literacy is plural and that learners are designers of meaning. They draw on Available Designs, transform them through Designing and produce the Redesigned.",
+        c:"A digital story often remixes familiar genres such as the film trailer or the vlog. Assess how learners adapt a model text, not only how closely they reproduce it." },
+      { l:"Multimodal literacy", s:["jewitt2008"],
+        d:"The ability to understand and create texts that combine modes. For assessment purposes it can be described as three related abilities.",
+        c:"Use the three abilities as a progression: learners first interpret multimodal texts together, then combine modes themselves, then design meaning for a real audience.",
+        k:[
+          { l:"Interpreting modes collaboratively",
+            d:"Learners work out together how meaning is distributed across words, images and sound.",
+            c:"Pairs analyse an advertisement: what does the image claim that the text never says?" },
+          { l:"Integrating text, image and sound",
+            d:"Learners combine modes so that they reinforce, extend or contrast with each other.",
+            c:"In a poster on climate action, the headline, the photo and the statistic should tell one coherent story." },
+          { l:"Creating meaning proactively",
+            d:"Learners act as designers who make deliberate choices for an audience rather than as consumers of ready-made materials.",
+            c:"Groups choose the format of their final product themselves and justify the choice in a short design note." }
+        ]}
+    ]},
+  { l:"Task Formats",
+    d:"Typical multimodal tasks for the language classroom. Each format foregrounds different skills and has a different modal density.",
+    c:"Choose the format from the learning outcome, not from the tool. The same outcome can often be assessed through a lighter format.",
+    q:"For one learning outcome in your course, which format gives the clearest evidence with the lowest technical load?",
+    k:[
+      { l:"Video presentations and vlogs",
+        d:"Recorded spoken monologues supported by visuals. High modal density; strong evidence of fluency, pronunciation and audience awareness.",
+        c:"A “day in my life” vlog at A2 or a product pitch at B2. Keep it to two or three minutes and ask for a single take to reduce the advantage of heavy editing." },
+      { l:"Podcasts and audio stories",
+        d:"Speech-only products built from voice, intonation, music and sound. Lower modal density keeps attention on spoken language.",
+        c:"Pairs record a short interview podcast. The format suits shy learners and gives good evidence of turn-taking and interaction." },
+      { l:"Digital storytelling",
+        d:"Short narratives that combine narration, still images, on-screen text and music.",
+        c:"Learners tell a personal story using narrative tenses and linking words, then add images that carry the setting and mood." },
+      { l:"Role-play simulations",
+        d:"Recorded or live interaction in a realistic scenario, often on a video-call platform.",
+        c:"A job interview or a hotel complaint over a video call. Assess pragmatic choices, turn-taking and repair strategies, not only accuracy." },
+      { l:"Infographics and posters",
+        d:"Visual texts in which written language is short, dense and organised by layout.",
+        c:"Learners present survey results with comparatives and the language of trends; the layout has to guide the reader through the data." },
+      { l:"Screencasts",
+        d:"Narrated screen recordings that show a process or explain a product.",
+        c:"A learner explains step by step how to use a dictionary app, practising imperatives and sequencers." }
+    ]},
+  { l:"Designing an MDCA",
+    d:"Practical steps and design categories for building a multimodal assessment that is valid, fair and useful for teaching.",
+    c:"Plan the rubric before you choose the tool. Decisions taken at this stage prevent most later scoring problems.",
+    q:"Look at your last digital task. Could a learner with weak English but strong design skills have scored well?",
+    s:["hung2013"],
+    k:[
+      { l:"Define the construct",
+        d:"State which abilities the score represents and which modes count towards it.",
+        c:"Write one sentence, for example: “This task assesses the ability to give a clear spoken explanation in English supported by relevant visuals.”" },
+      { l:"Content area and problem of practice",
+        d:"Anchor the task in the content of your course and in a real communicative need.",
+        c:"Business English learners record a 90-second pitch for an investor; future engineers present a design solution to a client." },
+      { l:"Analytic rubric",
+        d:"Separate criteria for language, multimodal design and task achievement, with explicit weights.",
+        c:"For example: 60% language (range, accuracy, fluency, pronunciation), 25% multimodal coherence, 15% task achievement. Technical polish is not a criterion." },
+      { l:"Instruction and formative assessment",
+        d:"Assessment is built into the learning process through drafts, checkpoints and feedback rather than added at the end.",
+        c:"Storyboard check, peer feedback on a rough cut, teacher comments on language, then the final version." },
+      { l:"Professional development",
+        d:"Multimodal assessment asks teachers to take on new roles and to develop new skills.",
+        c:"Plan moderation sessions in which colleagues score the same sample products together and compare their decisions.",
+        k:[
+          { l:"Teacher as designer of experiences",
+            d:"The teacher designs sequences of tasks, tools and feedback, not just individual tests.",
+            c:"Map the full learning path from the first model text to the final product, including every point where feedback happens." },
+          { l:"Developing multimodal literacy",
+            d:"Teachers need their own fluency in reading and making multimodal texts in order to judge learners’ work.",
+            c:"Make the product yourself first. You will see where the language load and the technical load really lie." },
+          { l:"Ongoing training",
+            d:"Tools and formats change quickly, so professional learning has to be continuous.",
+            c:"A short workshop each term or a community of practice where teachers share rubrics and annotated samples." }
+        ]}
+    ]},
+  { l:"Evidence of Impact",
+    d:"What research and classroom practice report about the benefits of multimodal digital assessment.",
+    c:"These benefits depend on careful design. A poorly designed task can produce engagement without evidence of learning.",
+    q:"Which of these benefits matters most for your learners, and how could you check whether it actually happens?",
+    k:[
+      { l:"High modal density in video presentations",
+        d:"Video presentations combine many modes, which makes them rich but demanding for learners and assessors alike.",
+        c:"Expect wider variation in quality and plan scaffolding: model videos, checklists and practice runs." },
+      { l:"Authentic engagement via role-play",
+        d:"Simulations with a realistic purpose and audience increase engagement and elicit more natural interaction.",
+        c:"Learners take roles in a recorded client meeting and later reflect on their own language choices." },
+      { l:"Higher-order thinking",
+        d:"Planning, selecting and synthesising across modes call for analysis, evaluation and creation.",
+        c:"Ask learners to explain one design choice in a short reflection. This makes their thinking visible and assessable." },
+      { l:"Longitudinal tracking",
+        d:"Digital products and their drafts can be stored and compared over time.",
+        c:"An e-portfolio with recordings from the start, middle and end of term shows progress in fluency and pronunciation." },
+      { l:"Rich evidence of learning",
+        d:"Products, drafts, storyboards and reflections together reveal more than a single test score.",
+        c:"Triangulate: the final video, the storyboard and a short oral follow-up on the content." }
+    ]},
+  { l:"Key Challenges",
+    d:"Problems that can weaken the validity, fairness or practicality of multimodal assessment.",
+    c:"Most of these can be reduced through design: alternative formats, clear criteria and evidence of the process.",
+    q:"Which challenge is most likely in your context, and what is one design change that would reduce it?",
+    k:[
+      { l:"Uneven digital literacy",
+        d:"Learners differ greatly in access to devices and in technical skills, and these differences can distort scores.",
+        c:"Run a short tool-training session before the task and allow simpler formats with the same language demands." },
+      { l:"Privacy in digital recordings",
+        d:"Learners’ faces and voices are personal data. Recording, storing and sharing them requires informed consent and a secure platform.",
+        c:"Keep recordings inside the institutional LMS, explain who will see them and offer alternatives such as voice only or an avatar." },
+      { l:"Technical distractions",
+        d:"Technology can pull attention away from language and from the learning process itself.",
+        c:"Build language checkpoints and process evidence into the task design.",
+        k:[
+          { l:"Focus shifts to task completion",
+            d:"Learners concentrate on finishing and polishing the product rather than on the language.",
+            c:"Set a language checkpoint before production starts, for example an approved script or outline." },
+          { l:"Difficulty observing the whole process",
+            d:"Much of the work happens outside class and is invisible in the final product.",
+            c:"Ask for process evidence: drafts, version history or a short work log." }
+        ]},
+      { l:"Teacher assessment literacy",
+        d:"Teachers need the knowledge and confidence to design, score and interpret multimodal tasks.",
+        c:"Co-score a few samples with colleagues before marking the whole group." },
+      { l:"AI-generated content and authorship",
+        d:"AI tools can now write scripts, generate voices, translate speech and produce video, which raises new questions about authorship.",
+        c:"Decide in advance which AI uses are allowed, ask learners to declare them and add a short live follow-up in which learners discuss their product." }
+    ]},
+  { l:"Future Directions",
+    d:"Where research and classroom practice need to go next.",
+    c:"Treat your own classroom as a research site: small, systematic checks build the evidence the field still lacks.",
+    q:"What small classroom study could you run this term to test one of these directions?",
+    k:[
+      { l:"Aligning assessment with digital meaning-making",
+        d:"Assessment should reflect the ways learners actually communicate today.",
+        c:"Review your course assessments and replace at least one language-only task with a multimodal task that targets the same outcome." },
+      { l:"Complementing traditional methods",
+        d:"Multimodal tasks complement tests of grammar, vocabulary, reading and writing rather than replace them.",
+        c:"Combine a multimodal project with a short written test so that both the product and core language knowledge are assessed." },
+      { l:"Validation research",
+        d:"Systematic studies that collect evidence for the interpretation and use of multimodal scores.",
+        c:"Start small: one class, one rubric and two raters.",
+        k:[
+          { l:"Classroom-context studies",
+            d:"Most validity evidence comes from large-scale testing; evidence from real classrooms is still scarce.",
+            c:"Compare two raters’ scores on the same set of videos to check consistency." },
+          { l:"Evaluating modal interaction",
+            d:"Rubrics rarely capture how modes work together. Better descriptors of intermodal coherence are needed.",
+            c:"Pilot a criterion such as “the visuals add information that the speech does not simply repeat”." },
+          { l:"Ensuring fairness in digital tasks",
+            d:"Research should show whether tasks work equally well for learners with different devices, skills and needs.",
+            c:"Compare the results of learners who chose different formats for the same task." }
+        ]},
+      { l:"Responsible AI in feedback",
+        d:"AI tools can give quick feedback on scripts, transcripts and pronunciation, but they need teacher oversight and clear limits.",
+        c:"Learners get automatic feedback on their script and revise it; the teacher assesses the final product." }
+    ]}
+  ]
+};
+
+/* ---------- Prepare tree ---------- */
+const all = [], byId = {};
+(function prep(n, parent, depth, bi){
+  n.id = "n" + all.length; n.parent = parent; n.depth = depth; n.k = n.k || [];
+  n.bi = depth === 0 ? -1 : bi; n.side = n.bi < 0 ? 0 : (n.bi < 3 ? 1 : -1);
+  n.expanded = depth === 0;
+  all.push(n); byId[n.id] = n;
+  n.k.forEach((c, i) => prep(c, n, depth + 1, depth === 0 ? i : bi));
+})(DATA, null, 0, -1);
+const ROOT = all[0];
+
+const $ = s => document.querySelector(s);
+const app = $("#app"), stage = $("#stage"), world = $("#world"), svg = $("#links"), panel = $("#panel");
+const NS = "http://www.w3.org/2000/svg";
+const colorOf = n => n.depth ? COLORS[n.bi] : "#1D2230";
+
+/* ---------- Progress ---------- */
+let explored = new Set();
+try { const raw = localStorage.getItem("mdca-map-explored"); if (raw) JSON.parse(raw).forEach(id => byId[id] && explored.add(id)); } catch(e){}
+function saveProgress(){ try { localStorage.setItem("mdca-map-explored", JSON.stringify([...explored])); } catch(e){} }
+function updateProgress(){
+  $("#pCount").textContent = explored.size; $("#pTotal").textContent = all.length;
+  $("#pBar").style.width = (explored.size / all.length * 100) + "%";
+  all.forEach(n => { S[n.id].el.classList.toggle("explored", explored.has(n.id)); if (O[n.id]) O[n.id].classList.toggle("explored", explored.has(n.id)); });
+}
+
+/* ---------- Build nodes ---------- */
+const S = {};
+all.forEach(n => {
+  const el = document.createElement("button");
+  el.type = "button"; el.dataset.id = n.id;
+  let cls = "node ";
+  if (n.depth === 0) cls += "node-root";
+  else if (n.depth === 1) cls += "node-branch";
+  else cls += "node-leaf d" + n.depth;
+  if (n.depth) cls += n.side > 0 ? " side-r" : " side-l";
+  if (n.k.length && n.depth) cls += " has-kids";
+  el.className = cls;
+  if (n.depth) el.style.setProperty("--c", colorOf(n));
+  const tog = (n.k.length && n.depth) ? '<span class="tog" aria-hidden="true">+</span>' : "";
+  if (n.depth === 0) el.innerHTML = '<span class="r-title"></span><span class="r-sub"></span>';
+  else if (n.depth === 1) el.innerHTML = '<span class="num">0' + (n.bi + 1) + '</span><span class="lbl"></span><span class="dot"></span>' + tog;
+  else el.innerHTML = '<span class="lbl"></span><span class="dot"></span>' + tog;
+  if (n.depth === 0) { el.querySelector(".r-title").textContent = n.l; el.querySelector(".r-sub").textContent = n.sub; }
+  else el.querySelector(".lbl").textContent = n.l;
+  el.style.display = "none";
+  world.appendChild(el);
+  let path = null;
+  if (n.parent) {
+    path = document.createElementNS(NS, "path");
+    path.setAttribute("stroke", colorOf(n));
+    path.setAttribute("stroke-width", n.depth === 1 ? 2.4 : 1.6);
+    path.style.display = "none";
+    svg.appendChild(path);
+  }
+  S[n.id] = { el, path, w:0, h:0, x:0, y:0, o:0, fx:0, fy:0, fo:0, tx:0, ty:0, to:0, vis:false, shown:false };
+});
+
+function isVis(n){ let p = n.parent; while (p) { if (!p.expanded) return false; p = p.parent; } return true; }
+function setTogs(){ all.forEach(n => { const t = S[n.id].el.querySelector(".tog"); if (t) t.textContent = n.expanded ? "−" : "+"; S[n.id].el.setAttribute("aria-expanded", n.k.length && n.depth ? String(n.expanded) : ""); if (!(n.k.length && n.depth)) S[n.id].el.removeAttribute("aria-expanded"); }); }
+
+/* ---------- Layout ---------- */
+const GAP = 10, BGAP = 22, COLGAP = 56, ROOTGAP = 72, DUR = 380;
+function measure(){
+  all.forEach(n => { const st = S[n.id]; st.vis = isVis(n); if (st.vis) { if (st.el.style.display === "none") st.el.style.display = ""; st.w = st.el.offsetWidth; st.h = st.el.offsetHeight; } });
+}
+function layout(){
+  const R = S[ROOT.id]; R.tx = 0; R.ty = 0; R.to = 1;
+  const subH = {};
+  const sub = n => { const st = S[n.id]; let h = st.h;
+    if (n.expanded && n.k.length) { const s = n.k.reduce((a, c) => a + sub(c), 0) + GAP * (n.k.length - 1); h = Math.max(h, s); }
+    else n.k.forEach(c => sub(c));
+    subH[n.id] = h; return h; };
+  [1, -1].forEach(side => {
+    const br = ROOT.k.filter(b => b.side === side);
+    const colW = {};
+    all.forEach(n => { if (n.depth > 0 && n.side === side && S[n.id].vis) colW[n.depth] = Math.max(colW[n.depth] || 0, S[n.id].w); });
+    const colX = { 1: R.w / 2 + ROOTGAP };
+    for (let d = 2; d <= 5; d++) colX[d] = colX[d - 1] + (colW[d - 1] || 0) + COLGAP;
+    br.forEach(b => sub(b));
+    const total = br.reduce((a, b) => a + subH[b.id], 0) + BGAP * (br.length - 1);
+    let top = -total / 2;
+    const place = (n, t) => {
+      const st = S[n.id]; const h = subH[n.id];
+      st.ty = t + h / 2; st.tx = side * (colX[n.depth] + st.w / 2); st.to = 1;
+      if (n.expanded && n.k.length) {
+        const kt = n.k.reduce((a, c) => a + subH[c.id], 0) + GAP * (n.k.length - 1);
+        let y = st.ty - kt / 2;
+        n.k.forEach(c => { place(c, y); y += subH[c.id] + GAP; });
+      }
+    };
+    br.forEach(b => { place(b, top); top += subH[b.id] + BGAP; });
+  });
+  all.forEach(n => { const st = S[n.id]; if (!st.vis) { const p = S[n.parent.id]; st.tx = p.tx; st.ty = p.ty; st.to = 0; } });
+}
+
+let raf = 0;
+function relayout(anim = true){
+  measure(); layout(); setTogs();
+  all.forEach(n => {
+    const st = S[n.id];
+    if (st.vis && !st.shown && n.parent) { const p = S[n.parent.id]; st.x = p.x; st.y = p.y; st.o = 0; }
+    if (st.vis) st.shown = true;
+    st.fx = st.x; st.fy = st.y; st.fo = st.o;
+    st.el.style.pointerEvents = st.vis ? "" : "none";
+    st.el.tabIndex = st.vis ? 0 : -1;
+  });
+  cancelAnimationFrame(raf);
+  if (!anim) { all.forEach(n => { const st = S[n.id]; st.x = st.tx; st.y = st.ty; st.o = st.to; }); draw(); finish(); return; }
+  const t0 = performance.now();
+  const step = now => {
+    const k = Math.min(1, (now - t0) / DUR), e = 1 - Math.pow(1 - k, 3);
+    all.forEach(n => { const st = S[n.id]; st.x = st.fx + (st.tx - st.fx) * e; st.y = st.fy + (st.ty - st.fy) * e; st.o = st.fo + (st.to - st.fo) * e; });
+    draw();
+    if (k < 1) raf = requestAnimationFrame(step); else finish();
+  };
+  raf = requestAnimationFrame(step);
+}
+function finish(){
+  all.forEach(n => { const st = S[n.id]; if (!st.vis) { st.shown = false; st.o = 0; st.el.style.display = "none"; if (st.path) st.path.style.display = "none"; } });
+}
+function draw(){
+  all.forEach(n => {
+    const st = S[n.id];
+    if (!st.shown) return;
+    st.el.style.transform = "translate(" + (st.x - st.w / 2) + "px," + (st.y - st.h / 2) + "px)";
+    st.el.style.opacity = st.o;
+    if (st.path) {
+      const p = S[n.parent.id], sd = n.side;
+      const x1 = p.x + sd * p.w / 2, y1 = p.y, x2 = st.x - sd * st.w / 2, y2 = st.y, dx = (x2 - x1) / 2;
+      st.path.setAttribute("d", "M" + x1 + "," + y1 + " C" + (x1 + dx) + "," + y1 + " " + (x2 - dx) + "," + y2 + " " + x2 + "," + y2);
+      st.path.style.display = "";
+      st.path.style.opacity = st.o * (n.depth === 1 ? 0.85 : 0.55);
+    }
+  });
+}
+
+/* ---------- View (pan & zoom) ---------- */
+let view = { s:1, tx:0, ty:0 };
+function applyView(anim){ world.classList.toggle("anim", !!anim); world.style.transform = "translate(" + view.tx + "px," + view.ty + "px) scale(" + view.s + ")"; }
+function wide(){ return app.clientWidth >= 760; }
+function availW(){ const W = stage.clientWidth; return (panelOpen && wide()) ? Math.max(260, W - (panel.offsetWidth + 28)) : W; }
+function fitTo(nodes, maxS = 1.05, minS = 0.3, anim = true){
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  nodes.forEach(n => { const st = S[n.id]; if (!st.vis) return; x0 = Math.min(x0, st.tx - st.w / 2 - 12); x1 = Math.max(x1, st.tx + st.w / 2 + 12); y0 = Math.min(y0, st.ty - st.h / 2); y1 = Math.max(y1, st.ty + st.h / 2); });
+  if (!isFinite(x0)) return;
+  const W = availW(), H = stage.clientHeight, pad = 36;
+  let s = Math.min((W - 2 * pad) / (x1 - x0), (H - 2 * pad - 30) / (y1 - y0), maxS);
+  s = Math.max(s, minS);
+  view = { s, tx: W / 2 - (x0 + x1) / 2 * s, ty: H / 2 + 12 - (y0 + y1) / 2 * s };
+  applyView(anim);
+}
+function fitAll(anim = true){ fitTo(all, 1, 0.22, anim); }
+function visibleSubtree(n){ const out = [n]; const walk = m => m.k.forEach(c => { if (S[c.id].vis) { out.push(c); walk(c); } }); walk(n); return out; }
+function ensureVisible(n){
+  const st = S[n.id], W = availW(), H = stage.clientHeight, m = 30;
+  const left = (st.tx - st.w / 2) * view.s + view.tx, right = (st.tx + st.w / 2) * view.s + view.tx;
+  const top = (st.ty - st.h / 2) * view.s + view.ty, bottom = (st.ty + st.h / 2) * view.s + view.ty;
+  if (left < m || right > W - m || top < m || bottom > H - m) {
+    view.tx = W / 2 - st.tx * view.s; view.ty = H / 2 - st.ty * view.s; applyView(true);
+  }
+}
+function zoomAt(f, cx, cy, anim){
+  const s2 = Math.min(2.2, Math.max(0.22, view.s * f)), k = s2 / view.s;
+  view = { s: s2, tx: cx - (cx - view.tx) * k, ty: cy - (cy - view.ty) * k }; applyView(anim);
+}
+$("#zIn").onclick = () => zoomAt(1.25, availW() / 2, stage.clientHeight / 2, true);
+$("#zOut").onclick = () => zoomAt(0.8, availW() / 2, stage.clientHeight / 2, true);
+$("#zFit").onclick = () => fitAll(true);
+stage.addEventListener("wheel", e => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  e.preventDefault();
+  const r = stage.getBoundingClientRect();
+  zoomAt(Math.exp(-e.deltaY * 0.0045), e.clientX - r.left, e.clientY - r.top, false);
+}, { passive:false });
+
+let drag = null;
+stage.addEventListener("pointerdown", e => {
+  if (e.target.closest(".node,.zoom,.hint")) return;
+  drag = { x:e.clientX, y:e.clientY, tx:view.tx, ty:view.ty, moved:false };
+  stage.setPointerCapture(e.pointerId); stage.classList.add("dragging");
+});
+stage.addEventListener("pointermove", e => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
+  view.tx = drag.tx + dx; view.ty = drag.ty + dy; applyView(false);
+});
+const endDrag = () => { if (!drag) return; if (!drag.moved) closePanel(); drag = null; stage.classList.remove("dragging"); };
+stage.addEventListener("pointerup", endDrag);
+stage.addEventListener("pointercancel", () => { drag = null; stage.classList.remove("dragging"); });
+
+/* ---------- Map interaction ---------- */
+world.addEventListener("click", e => {
+  const el = e.target.closest(".node"); if (!el) return;
+  const n = byId[el.dataset.id];
+  if (e.target.closest(".tog")) { toggle(n); return; }
+  if (n.k.length && n.depth) {
+    if (!n.expanded) { n.expanded = true; openPanel(n); relayout(); fitTo(visibleSubtree(n), 1.05, 0.55); return; }
+    if (current === n && panelOpen) { n.expanded = false; relayout(); return; }
+  }
+  openPanel(n); ensureVisible(n);
+});
+function toggle(n){
+  n.expanded = !n.expanded; relayout();
+  if (n.expanded) fitTo(visibleSubtree(n), 1.05, 0.55);
+}
+
+/* ---------- Outline ---------- */
+const O = {}, OD = {};
+function buildOutline(){
+  const wrap = $("#oWrap");
+  const r = document.createElement("button"); r.type = "button"; r.className = "o-root";
+  r.innerHTML = "<b></b><span></span>"; r.querySelector("b").textContent = ROOT.l; r.querySelector("span").textContent = ROOT.sub + " · overview";
+  r.onclick = () => openPanel(ROOT); wrap.appendChild(r);
+  const rowFor = (n) => {
+    const b = document.createElement(n.k.length ? "div" : "button");
+    if (!n.k.length) b.type = "button";
+    b.className = "o-row"; b.style.setProperty("--c", colorOf(n));
+    if (n.depth === 1) { const num = document.createElement("span"); num.className = "num"; num.textContent = "0" + (n.bi + 1); b.appendChild(num); }
+    const t = document.createElement("span"); t.textContent = n.l; b.appendChild(t);
+    const dot = document.createElement("span"); dot.className = "dot"; b.appendChild(dot);
+    if (n.k.length) { const p = document.createElement("span"); p.className = "plus"; b.appendChild(p); }
+    O[n.id] = b; return b;
+  };
+  const build = (n, container) => {
+    if (n.k.length) {
+      const d = document.createElement("details"); d.className = "o-item" + (n.depth === 1 ? " o-branch" : "");
+      d.style.setProperty("--c", colorOf(n));
+      const s = document.createElement("summary"); s.appendChild(rowFor(n)); d.appendChild(s);
+      s.addEventListener("click", () => openPanel(n));
+      const box = document.createElement("div"); box.className = "o-children"; d.appendChild(box);
+      n.k.forEach(c => build(c, box));
+      container.appendChild(d); OD[n.id] = d;
+    } else {
+      const b = rowFor(n); b.onclick = () => openPanel(n); container.appendChild(b);
+    }
+  };
+  ROOT.k.forEach(b => build(b, wrap));
+}
+
+/* ---------- Panel ---------- */
+let current = null, panelOpen = false;
+function crumb(n){ const a = []; let p = n.parent; while (p && p.depth > 0) { a.unshift(p.l); p = p.parent; } return a.join(" / "); }
+function esc(s){ const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+function openPanel(n){
+  current = n; panelOpen = true;
+  explored.add(n.id); saveProgress();
+  document.querySelectorAll(".node.selected,.o-row.active").forEach(e => e.classList.remove("selected","active"));
+  S[n.id].el.classList.add("selected"); if (O[n.id]) O[n.id].classList.add("active");
+  panel.style.setProperty("--c", colorOf(n));
+  $("#pChip").textContent = n.depth === 0 ? "Overview" : (n.depth === 1 ? "Section " + (n.bi + 1) : ROOT.k[n.bi].l);
+  $("#pCrumb").textContent = n.depth > 1 ? crumb(n) : "";
+  $("#pCrumb").style.display = n.depth > 1 ? "" : "none";
+  $("#pTitle").textContent = n.l;
+  $("#pSub").textContent = n.sub || ""; $("#pSub").style.display = n.sub ? "" : "none";
+  let h = '<div class="sec"><h3>What it means</h3><p>' + esc(n.d) + '</p></div>';
+  if (n.c) h += '<div class="sec"><h3>In the language classroom</h3><div class="box"><p>' + esc(n.c) + '</p></div></div>';
+  if (n.q) h += '<div class="sec"><h3>Reflect</h3><div class="reflect"><p>' + esc(n.q) + '</p></div></div>';
+  if (n.k.length) h += '<div class="sec"><h3>' + (n.depth === 0 ? "Sections" : "Subtopics") + '</h3><div class="chips">' + n.k.map(c => '<button type="button" data-go="' + c.id + '" class="' + (explored.has(c.id) ? "seen" : "") + '">' + esc(c.l) + '</button>').join("") + '</div></div>';
+  if (n.s && n.s.length) h += '<div class="sec"><h3>Key sources</h3><ul class="srcs">' + n.s.map(k => '<li>' + REFS[k].s + '</li>').join("") + '</ul></div>';
+  $("#pBody").innerHTML = h;
+  $("#pScroll").scrollTop = 0;
+  const i = all.indexOf(n);
+  $("#pPos").textContent = (i + 1) + " / " + all.length;
+  $("#pPrev").disabled = i === 0; $("#pNext").disabled = i === all.length - 1;
+  panel.classList.add("open"); panel.setAttribute("aria-hidden", "false"); app.classList.add("panel-open");
+  updateProgress();
+}
+function closePanel(){
+  if (!panelOpen) return;
+  panelOpen = false; panel.classList.remove("open"); panel.setAttribute("aria-hidden", "true"); app.classList.remove("panel-open");
+  document.querySelectorAll(".node.selected,.o-row.active").forEach(e => e.classList.remove("selected","active"));
+}
+function go(n){
+  if (app.classList.contains("v-outline")) {
+    let p = n.parent; while (p && p.depth > 0) { if (OD[p.id]) OD[p.id].open = true; p = p.parent; }
+    openPanel(n);
+    if (O[n.id]) O[n.id].scrollIntoView({ block:"nearest", behavior:"smooth" });
+  } else {
+    let changed = false, p = n.parent;
+    while (p) { if (!p.expanded) { p.expanded = true; changed = true; } p = p.parent; }
+    openPanel(n);
+    if (changed) relayout();
+    ensureVisible(n);
+  }
+}
+$("#pBody").addEventListener("click", e => { const b = e.target.closest("[data-go]"); if (b) go(byId[b.dataset.go]); });
+$("#pPrev").onclick = () => { const i = all.indexOf(current); if (i > 0) go(all[i - 1]); };
+$("#pNext").onclick = () => { const i = all.indexOf(current); if (i < all.length - 1) go(all[i + 1]); };
+$("#pClose").onclick = closePanel;
+
+/* ---------- Toolbar ---------- */
+function setView(v){
+  const outline = v === "outline";
+  app.classList.toggle("v-outline", outline);
+  $("#vMap").setAttribute("aria-pressed", String(!outline));
+  $("#vOutline").setAttribute("aria-pressed", String(outline));
+  if (!outline) requestAnimationFrame(() => { relayout(false); fitAll(false); if (current && panelOpen) ensureVisible(current); });
+}
+$("#vMap").onclick = () => setView("map");
+$("#vOutline").onclick = () => setView("outline");
+$("#expandAll").onclick = () => {
+  all.forEach(n => { if (n.k.length) n.expanded = true; });
+  Object.values(OD).forEach(d => d.open = true);
+  if (!app.classList.contains("v-outline")) { relayout(); fitAll(); }
+};
+$("#collapseAll").onclick = () => {
+  all.forEach(n => { if (n.depth) n.expanded = false; });
+  Object.values(OD).forEach(d => d.open = false);
+  if (!app.classList.contains("v-outline")) { relayout(); fitAll(); }
+};
+$("#resetBtn").onclick = () => { explored = new Set(); saveProgress(); updateProgress(); if (current && panelOpen) openPanel(current); };
+$("#hintX").onclick = () => { $("#hint").style.display = "none"; };
+
+const refsModal = $("#refsModal");
+$("#refsList").innerHTML = Object.values(REFS).map(r => "<li>" + r.f + "</li>").join("");
+$("#refsBtn").onclick = () => { refsModal.classList.add("open"); $("#refsClose").focus(); };
+$("#refsClose").onclick = () => refsModal.classList.remove("open");
+refsModal.addEventListener("click", e => { if (e.target === refsModal) refsModal.classList.remove("open"); });
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") { if (refsModal.classList.contains("open")) refsModal.classList.remove("open"); else closePanel(); }
+});
+
+let rT = 0;
+window.addEventListener("resize", () => { clearTimeout(rT); rT = setTimeout(() => { if (!app.classList.contains("v-outline")) fitAll(false); }, 150); });
+
+/* ---------- Init ---------- */
+buildOutline();
+updateProgress();
+relayout(false);
+fitAll(false);
+if (window.innerWidth < 640) setView("outline");
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { relayout(false); fitAll(false); });
+})();
+</script>
+</body>
+</html>
